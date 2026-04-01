@@ -118,7 +118,7 @@ async function send() {
 
   // カテゴリなし → "<金額> <通貨>"  (Bot 側で食費扱い)
   // カテゴリあり → "<金額> <カテゴリ> <通貨>"
-  const parts = [displayString, selectedCategory, selectedCurrency].filter(Boolean);
+  const parts = [displayString, selectedCategory].filter(Boolean);
   const message = parts.join(' ');
 
   const sendBtn = document.getElementById('btnSend');

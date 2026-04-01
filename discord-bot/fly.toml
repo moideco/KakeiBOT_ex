@@ -1,0 +1,12 @@
+app = "kakeibot"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  GOOGLE_CREDENTIALS_FILE = "/app/credentials.json"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
