@@ -32,6 +32,9 @@ EXPENSE_PATTERN = re.compile(
 AMOUNT_ONLY_PATTERN = re.compile(
     rf"^(-?\d+(?:\.\d+)?)(?:\s+({_CURRENCIES}))?$", re.IGNORECASE
 )
+INCOME_PATTERN = re.compile(
+    rf"^!収入\s+(\d+(?:\.\d+)?)(?:\s+({_CURRENCIES}))?$", re.IGNORECASE
+)
 DEFAULT_CATEGORY = "食費"
 
 intents = discord.Intents.default()
@@ -82,6 +85,18 @@ async def on_message(message: discord.Message) -> None:
         return
 
     content = message.content.strip()
+
+    income_match = INCOME_PATTERN.match(content)
+    if income_match:
+        amount   = float(income_match.group(1))
+        currency = (income_match.group(2) or Config.DEFAULT_CURRENCY).upper()
+        success, error_msg = sheets.set_income(amount, currency)
+        if success:
+            await message.add_reaction("✅")
+        else:
+            await message.add_reaction("❌")
+            await message.channel.send(f"⚠️ 収入の登録に失敗しました。\n```{error_msg}```")
+        return
 
     match = EXPENSE_PATTERN.match(content)
     if match:
