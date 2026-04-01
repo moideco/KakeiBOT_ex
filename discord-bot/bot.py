@@ -75,7 +75,7 @@ async def on_ready() -> None:
 
 @bot.event
 async def on_message(message: discord.Message) -> None:
-    if message.author.bot:
+    if message.author.bot and not message.webhook_id:
         return
     if message.channel.id != Config.EXPENSE_CHANNEL_ID:
         await bot.process_commands(message)
