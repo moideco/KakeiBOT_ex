@@ -22,6 +22,10 @@
 
     <!-- Display -->
     <div class="display">
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btnExpense" onclick="setMode('expense')">支出</button>
+        <button class="mode-btn" id="btnIncome" onclick="setMode('income')">収入</button>
+      </div>
       <div class="currency-label" id="currencyLabel"></div>
       <div class="amount-display" id="amountDisplay">0</div>
       <div class="category-display" id="categoryDisplay">カテゴリなし</div>

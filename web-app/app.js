@@ -6,6 +6,7 @@ const DEFAULT_CATS   = '食費,家賃,娯楽';
 let displayString    = '0';
 let selectedCategory = null;
 let selectedCurrency = 'JPY';
+let currentMode      = 'expense';
 
 // ── Init ──────────────────────────────────────────────
 
@@ -14,6 +15,22 @@ function init() {
   document.getElementById('currencyLabel').textContent = selectedCurrency === 'JPY' ? '¥ JPY' : '$ USD';
   loadCategories();
   setupKeyboard();
+}
+
+// ── Mode ──────────────────────────────────────────────
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnExpense').classList.toggle('active', mode === 'expense');
+  document.getElementById('btnIncome').classList.toggle('active', mode === 'income');
+  document.getElementById('categorySection').style.display = mode === 'income' ? 'none' : '';
+  document.querySelectorAll('.divider')[0].style.display   = mode === 'income' ? 'none' : '';
+  document.getElementById('categoryDisplay').style.display = mode === 'income' ? 'none' : '';
+  if (mode === 'income') {
+    document.querySelectorAll('.category-chip').forEach(b => b.classList.remove('selected'));
+    selectedCategory = null;
+  }
+  clearDisplay();
 }
 
 // ── Categories ────────────────────────────────────────
@@ -116,10 +133,9 @@ async function send() {
     return;
   }
 
-  // カテゴリなし → "<金額> <通貨>"  (Bot 側で食費扱い)
-  // カテゴリあり → "<金額> <カテゴリ> <通貨>"
-  const parts = [displayString, selectedCategory].filter(Boolean);
-  const message = parts.join(' ');
+  const message = currentMode === 'income'
+    ? `!収入 ${displayString}`
+    : [displayString, selectedCategory].filter(Boolean).join(' ');
 
   const sendBtn = document.getElementById('btnSend');
   sendBtn.disabled    = true;

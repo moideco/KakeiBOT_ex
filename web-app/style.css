@@ -59,6 +59,28 @@ header {
   margin-bottom: 6px;
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mode-btn {
+  background: transparent;
+  border: 1px solid #636366;
+  color: #8e8e93;
+  padding: 5px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-btn.active {
+  background: #636366;
+  color: #fff;
+}
+
 .currency-label {
   font-size: 13px;
   color: #8e8e93;
