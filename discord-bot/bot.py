@@ -160,24 +160,24 @@ async def cmd_month(ctx: commands.Context) -> None:
 
 @bot.command(name="予算")
 async def cmd_budget(ctx: commands.Context, amount: str = "") -> None:
-    """1日の予算を表示・設定する。引数なしで表示、金額を渡すと設定。"""
-    currency = Config.DEFAULT_CURRENCY
+    """食費予算（1日あたり）を表示・設定する。引数なしで表示、金額を渡すと設定。"""
+    currency = sheets.get_default_currency()
     if not amount:
-        budget = sheets.get_daily_budget(currency)
+        budget = sheets.get_food_budget()
         if budget > 0:
-            await ctx.send(f"💰 1日の予算: **{fmt(budget, currency)}**")
+            await ctx.send(f"🍚 食費予算 (1日): **{fmt(budget, currency)}**")
         else:
-            await ctx.send(f"💰 1日の予算 ({currency}): 未設定\n`!予算 <金額>` で設定できます。")
+            await ctx.send(f"🍚 食費予算: 未設定\n`!予算 <金額>` で設定できます。")
         return
 
     value = float_or_none(amount)
     if value is None or value <= 0:
-        await ctx.send(f"⚠️ 正しい金額を入力してください。例: `!予算 30`")
+        await ctx.send("⚠️ 正しい金額を入力してください。例: `!予算 1000`")
         return
 
-    success, error_msg = sheets.set_daily_budget(value, currency)
+    success, error_msg = sheets.set_food_budget(value)
     if success:
-        await ctx.send(f"✅ 1日の予算を **{fmt(value, currency)}** に設定しました。")
+        await ctx.send(f"✅ 食費予算 (1日) を **{fmt(value, currency)}** に設定しました。")
     else:
         await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
