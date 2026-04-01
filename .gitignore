@@ -1,6 +1,7 @@
 # ── 機密情報 (絶対にcommitしない) ──
 discord-bot/.env
 discord-bot/credentials.json
+discord-bot/token.json
 
 # ── Claude Code が生成した一時ファイル ──
 *.tmp.*
@@ -12,14 +13,6 @@ __pycache__/
 .venv/
 venv/
 env/
-
-# ── Android ──
-android-app/.gradle/
-android-app/local.properties
-android-app/app/build/
-android-app/build/
-*.apk
-*.aab
 
 # ── OS ──
 .DS_Store

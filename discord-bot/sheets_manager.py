@@ -313,15 +313,6 @@ class SheetsManager:
             if (d := _parse_date(str(r.get("日付", "")))) is not None and start <= d <= end
         ]
 
-    def _get_expenses_for_dates(self, start_date: str, end_date: str) -> list[dict]:
-        """start_date〜end_date (YYYY-MM-DD) の支出レコードを返す。"""
-        try:
-            all_records = self._expenses_sheet().get_all_records()
-            return self._filter_by_dates(all_records, start_date, end_date)
-        except Exception as exc:
-            print(f"[SheetsManager] _get_expenses_for_dates error: {exc}")
-            return []
-
     # ------------------------------------------------------------------
     # 集計ヘルパー
     # ------------------------------------------------------------------
