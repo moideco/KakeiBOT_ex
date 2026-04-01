@@ -10,6 +10,8 @@ KakeiBOT - 家計管理 Discord Bot
 """
 
 import re
+import subprocess
+import sys
 from datetime import datetime, time
 
 import discord
@@ -297,6 +299,31 @@ async def cmd_help(ctx: commands.Context) -> None:
         "```",
     ]
     await ctx.send("\n".join(lines))
+
+
+@bot.command(name="update")
+async def cmd_update(ctx: commands.Context) -> None:
+    """GitHubから最新コードを取得してBotを再起動する。"""
+    if ctx.author.id != Config.OWNER_ID:
+        await ctx.send("⚠️ このコマンドは管理者のみ使用できます。")
+        return
+
+    await ctx.send("🔄 アップデートを開始します...")
+    try:
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            capture_output=True,
+            text=True,
+            cwd="/home/s1675dis/KakeiBOT_ex",
+        )
+        output = result.stdout.strip() or result.stderr.strip() or "(出力なし)"
+        await ctx.send(f"```{output}```")
+    except Exception as e:
+        await ctx.send(f"❌ git pull 失敗: {e}")
+        return
+
+    await ctx.send("♻️ 再起動します...")
+    sys.exit(0)
 
 
 def float_or_none(value: str) -> float | None:

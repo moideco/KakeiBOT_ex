@@ -24,6 +24,8 @@ class Config:
     MONTHLY_REPORT_HOUR: int = int(os.getenv("MONTHLY_REPORT_HOUR", "9"))
     MONTHLY_REPORT_MINUTE: int = int(os.getenv("MONTHLY_REPORT_MINUTE", "0"))
 
+    OWNER_ID: int = int(os.getenv("OWNER_ID", "0"))
+
     TIMEZONE: str = "Asia/Tokyo"
 
     # サポートする通貨 (JPY / USD)
