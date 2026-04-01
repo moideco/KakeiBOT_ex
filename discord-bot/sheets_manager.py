@@ -162,31 +162,69 @@ class SheetsManager:
     # 読み取り
     # ------------------------------------------------------------------
 
-    def get_food_budget(self) -> float:
-        """予算設定シートから「食費予算」（1日あたり）を取得する。"""
+    # ------------------------------------------------------------------
+    # 予算管理 (カテゴリ × 期間)
+    # 保存形式: 予算_{category}_{period}  period = 日|週|月
+    # 後方互換: "食費予算" → 予算_食費_日 として読み込む
+    # ------------------------------------------------------------------
+
+    VALID_PERIODS = ("日", "週", "月")
+
+    def get_all_budgets(self) -> dict[str, tuple[float, str]]:
+        """全予算を返す。{category: (amount, period)} period=日|週|月"""
+        result: dict[str, tuple[float, str]] = {}
         try:
             records = self._budget_sheet().get_all_records()
             for row in records:
-                if str(row.get("項目", "")).strip() == "食費予算":
-                    return float(row.get("金額", 0))
+                key = str(row.get("項目", "")).strip()
+                # 旧形式の食費予算を日次として読み込む
+                if key == "食費予算":
+                    result["食費"] = (float(row.get("金額", 0)), "日")
+                    continue
+                if key.startswith("予算_"):
+                    parts = key.split("_", 2)   # ["予算", category, period]
+                    if len(parts) == 3 and parts[2] in self.VALID_PERIODS:
+                        cat, period = parts[1], parts[2]
+                        result[cat] = (float(row.get("金額", 0)), period)
         except Exception as exc:
-            print(f"[SheetsManager] get_food_budget error: {exc}")
-        return 0.0
+            print(f"[SheetsManager] get_all_budgets error: {exc}")
+        return result
 
-    def set_food_budget(self, amount: float) -> tuple[bool, str]:
-        """食費予算（1日あたり）を設定する（既存行があれば上書き）。"""
+    def set_budget(self, category: str, amount: float, period: str) -> tuple[bool, str]:
+        """カテゴリの予算を設定する。既存行があれば上書き（旧形式も統一）。"""
+        new_key = f"予算_{category}_{period}"
+        old_key = "食費予算" if category == "食費" else None
         try:
             sheet = self._budget_sheet()
             records = sheet.get_all_records()
             for i, row in enumerate(records, start=2):
-                if str(row.get("項目", "")).strip() == "食費予算":
+                k = str(row.get("項目", "")).strip()
+                # 旧形式の食費予算 or 既存の同カテゴリ予算行を上書き
+                if k == new_key or (old_key and k == old_key):
+                    sheet.update(f"A{i}", [[new_key]])
                     sheet.update(f"B{i}", [[amount]])
                     return True, ""
-            sheet.append_row(["食費予算", amount], value_input_option="USER_ENTERED")
+            sheet.append_row([new_key, amount], value_input_option="USER_ENTERED")
             return True, ""
         except Exception as exc:
-            print(f"[SheetsManager] set_food_budget error: {exc}")
+            print(f"[SheetsManager] set_budget error: {exc}")
             return False, str(exc)
+
+    def delete_budget(self, category: str) -> bool:
+        """カテゴリの予算を削除する。削除できた場合は True。"""
+        try:
+            sheet = self._budget_sheet()
+            records = sheet.get_all_records()
+            for i, row in enumerate(records, start=2):
+                k = str(row.get("項目", "")).strip()
+                is_old = (category == "食費" and k == "食費予算")
+                is_new = k.startswith(f"予算_{category}_")
+                if is_old or is_new:
+                    sheet.delete_rows(i)
+                    return True
+        except Exception as exc:
+            print(f"[SheetsManager] delete_budget error: {exc}")
+        return False
 
     def get_payday(self) -> int:
         """給料日 (1〜31) を返す。未設定の場合は 1。"""
@@ -263,35 +301,23 @@ class SheetsManager:
             print(f"[SheetsManager] delete_expense error: {exc}")
             return False
 
-    def _get_budget_records(self) -> list[dict]:
-        """予算設定シートのレコードを1回だけ取得する（内部用）。"""
-        try:
-            return self._budget_sheet().get_all_records()
-        except Exception as exc:
-            print(f"[SheetsManager] _get_budget_records error: {exc}")
-            return []
 
-    def _food_budget_from_records(self, records: list[dict]) -> float:
-        """レコードから食費予算を返す（API呼び出し節約用）。"""
-        for row in records:
-            if str(row.get("項目", "")).strip() == "食費予算":
-                return float(row.get("金額", 0))
-        return 0.0
+    def _filter_by_dates(
+        self, all_records: list[dict], start_date: str, end_date: str
+    ) -> list[dict]:
+        """事前取得済みレコードを日付範囲でフィルタする。"""
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end   = datetime.strptime(end_date,   "%Y-%m-%d").date()
+        return [
+            r for r in all_records
+            if (d := _parse_date(str(r.get("日付", "")))) is not None and start <= d <= end
+        ]
 
     def _get_expenses_for_dates(self, start_date: str, end_date: str) -> list[dict]:
-        """start_date〜end_date (YYYY-MM-DD) の支出レコードを返す。
-        日付はdateオブジェクトで比較するため、Sheetsのロケール形式に依存しない。
-        """
+        """start_date〜end_date (YYYY-MM-DD) の支出レコードを返す。"""
         try:
-            start = datetime.strptime(start_date, "%Y-%m-%d").date()
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
-            records = self._expenses_sheet().get_all_records()
-            result = []
-            for r in records:
-                d = _parse_date(str(r.get("日付", "")))
-                if d is not None and start <= d <= end:
-                    result.append(r)
-            return result
+            all_records = self._expenses_sheet().get_all_records()
+            return self._filter_by_dates(all_records, start_date, end_date)
         except Exception as exc:
             print(f"[SheetsManager] _get_expenses_for_dates error: {exc}")
             return []
@@ -320,59 +346,123 @@ class SheetsManager:
             result[currency] = (total, by_cat)
         return result
 
-    def _build_currency_section(
+    def _build_budget_lines(
         self,
         currency: str,
-        total: float,
-        by_category: dict[str, float],
-        food_budget: float,
-        days: int = 1,
+        budgets: dict[str, tuple[float, str]],
+        report_period: str,
+        agg_day:   dict[str, tuple[float, dict[str, float]]],
+        agg_week:  dict[str, tuple[float, dict[str, float]]],
+        agg_month: dict[str, tuple[float, dict[str, float]]],
+        days_elapsed: int = 1,
+        week_days_elapsed: int = 7,
     ) -> list[str]:
-        """通貨1つ分のレポートブロックを生成する。食費予算は食費カテゴリにのみ適用。"""
+        """予算比較行を生成する。
+        report_period: '日'|'週'|'月' (どのレポートから呼ばれているか)
+        各予算の period に応じて適切な集計データと比較する。
+        """
         lines: list[str] = []
-        food_total = by_category.get("食費", 0.0)
-        budget_total = food_budget * days
+        for cat, (budget_amt, budget_period) in sorted(budgets.items()):
+            if budget_amt <= 0:
+                continue
 
-        lines.append(f"**[{currency}]**")
-        lines.append(f"支出合計: {fmt(total, currency)}")
+            # 予算の期間に応じて比較する集計と予算額を決める
+            if budget_period == "日":
+                effective_budget = budget_amt * (
+                    days_elapsed if report_period == "月" else
+                    week_days_elapsed if report_period == "週" else 1
+                )
+                agg = agg_day if report_period == "日" else (
+                    agg_week if report_period == "週" else agg_month
+                )
+                label = f"{cat}予算({budget_period}{fmt(budget_amt, currency)}×{int(effective_budget/budget_amt)}日)"
+            elif budget_period == "週":
+                effective_budget = budget_amt
+                agg = agg_week
+                label = f"{cat}予算({budget_period})"
+                if report_period == "月":
+                    # 月レポートでは週予算の残りを週単位で表示
+                    label = f"{cat}予算(週{fmt(budget_amt, currency)})"
+            else:  # 月
+                effective_budget = budget_amt
+                agg = agg_month
+                label = f"{cat}予算({budget_period})"
 
-        if by_category:
-            for cat, amt in sorted(by_category.items(), key=lambda x: -x[1]):
-                lines.append(f"　{cat}: {fmt(amt, currency)}")
-
-        if budget_total > 0:
-            lines.append(f"食費予算: {fmt(budget_total, currency)}")
-            diff = budget_total - food_total
-            if diff >= 0:
-                lines.append(f"✅ 食費 {fmt(diff, currency)} 節約")
-            else:
-                lines.append(f"⚠️ 食費 {fmt(abs(diff), currency)} オーバー")
-
+            spent = agg.get(currency, (0.0, {}))[1].get(cat, 0.0)
+            diff  = effective_budget - spent
+            sign  = "✅" if diff >= 0 else "⚠️"
+            word  = "残" if diff >= 0 else "オーバー"
+            lines.append(
+                f"{sign} {label} {fmt(effective_budget, currency)}: "
+                f"{fmt(abs(diff), currency)} {word}"
+            )
         return lines
 
     # ------------------------------------------------------------------
     # レポート
     # ------------------------------------------------------------------
 
-    def get_daily_report(self) -> str:
-        today = _now()
+    def _fetch_period_aggregates(self) -> tuple[
+        dict, dict, dict, int, int, str, str, str, str
+    ]:
+        """日・週・月の集計を一括取得する。レポート共通の前処理。
+        戻り値: (agg_day, agg_week, agg_month, days_elapsed, week_days_elapsed,
+                 today_str, week_start_str, month_start_str, month_end_str)
+        """
+        now       = _now()
+        today     = now.date()
         today_str = today.strftime("%Y-%m-%d")
 
-        records = self._get_expenses_for_dates(today_str, today_str)
-        aggregated = self._aggregate(records)
-        budget_records = self._get_budget_records()
-        food_budget = self._food_budget_from_records(budget_records)
+        week_start     = now - timedelta(days=now.weekday())
+        week_start_str = week_start.strftime("%Y-%m-%d")
+        week_days_elapsed = now.weekday() + 1  # 月=1〜日=7
 
-        lines = [f"📊 **{today.strftime('%Y年%m月%d日')}の支出レポート**"]
+        payday = self.get_payday()
+        month_start, month_end = _get_pay_period(payday, today)
+        month_start_str = month_start.strftime("%Y-%m-%d")
+        month_end_str   = month_end.strftime("%Y-%m-%d")
+        days_elapsed    = (today - month_start).days + 1
+
+        try:
+            all_records = self._expenses_sheet().get_all_records()
+        except Exception as exc:
+            print(f"[SheetsManager] _fetch_period_aggregates error: {exc}")
+            all_records = []
+
+        agg_day   = self._aggregate(self._filter_by_dates(all_records, today_str, today_str))
+        agg_week  = self._aggregate(self._filter_by_dates(all_records, week_start_str, today_str))
+        agg_month = self._aggregate(self._filter_by_dates(all_records, month_start_str, today_str))
+
+        return (agg_day, agg_week, agg_month,
+                days_elapsed, week_days_elapsed,
+                today_str, week_start_str, month_start_str, month_end_str)
+
+    def get_daily_report(self) -> str:
+        now    = _now()
+        today  = now.date()
+        (agg_day, agg_week, agg_month,
+         days_elapsed, week_days_elapsed,
+         today_str, week_start_str, month_start_str, _) = self._fetch_period_aggregates()
+
+        budgets = self.get_all_budgets()
+        lines   = [f"📊 **{now.strftime('%Y年%m月%d日')}の支出レポート**"]
 
         for currency in Config.SUPPORTED_CURRENCIES:
-            if currency not in aggregated:
+            if currency not in agg_day:
                 continue
-            total, by_cat = aggregated[currency]
+            total, by_cat = agg_day[currency]
             lines.append("")
-            lines.extend(self._build_currency_section(currency, total, by_cat, food_budget, days=1))
+            lines.append(f"**[{currency}]**")
+            lines.append(f"支出合計: {fmt(total, currency)}")
+            for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
+                lines.append(f"　{cat}: {fmt(amt, currency)}")
+            lines.extend(self._build_budget_lines(
+                currency, budgets, "日",
+                agg_day, agg_week, agg_month,
+                days_elapsed, week_days_elapsed,
+            ))
 
-        if not aggregated:
+        if not agg_day:
             lines.append("本日の支出はありません。")
 
         return "\n".join(lines)
@@ -380,47 +470,50 @@ class SheetsManager:
     def get_weekly_report(self) -> str:
         now = _now()
         week_start = now - timedelta(days=now.weekday())
-        week_end = week_start + timedelta(days=6)
+        week_end   = week_start + timedelta(days=6)
 
-        records = self._get_expenses_for_dates(
-            week_start.strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")
-        )
-        aggregated = self._aggregate(records)
-        food_budget = self.get_food_budget()
+        (agg_day, agg_week, agg_month,
+         days_elapsed, week_days_elapsed,
+         today_str, week_start_str, month_start_str, _) = self._fetch_period_aggregates()
 
-        lines = [f"📅 **今週の支出レポート**"]
-        lines.append(
-            f"期間: {week_start.strftime('%m/%d')} 〜 {week_end.strftime('%m/%d')}"
-        )
+        budgets = self.get_all_budgets()
+        lines   = [f"📅 **今週の支出レポート**"]
+        lines.append(f"期間: {week_start.strftime('%m/%d')} 〜 {week_end.strftime('%m/%d')}")
 
         for currency in Config.SUPPORTED_CURRENCIES:
-            if currency not in aggregated:
+            if currency not in agg_week:
                 continue
-            total, by_cat = aggregated[currency]
+            total, by_cat = agg_week[currency]
             lines.append("")
-            lines.extend(
-                self._build_currency_section(currency, total, by_cat, food_budget, days=7)
-            )
+            lines.append(f"**[{currency}]**")
+            lines.append(f"支出合計: {fmt(total, currency)}")
+            for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
+                lines.append(f"　{cat}: {fmt(amt, currency)}")
+            lines.extend(self._build_budget_lines(
+                currency, budgets, "週",
+                agg_day, agg_week, agg_month,
+                days_elapsed, week_days_elapsed,
+            ))
 
-        if not aggregated:
+        if not agg_week:
             lines.append("今週の支出はありません。")
 
         return "\n".join(lines)
 
     def get_current_period_report(self) -> str:
         """現在の給与期間（今月）の進行中レポートを返す。"""
-        today = _now().date()
+        now   = _now()
+        today = now.date()
         payday = self.get_payday()
         start, end = _get_pay_period(payday, today)
-        days_total = (end - start).days + 1
+        days_total   = (end - start).days + 1
         days_elapsed = (today - start).days + 1
 
-        records = self._get_expenses_for_dates(
-            start.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
-        )
-        aggregated = self._aggregate(records)
-        budget_records = self._get_budget_records()
-        food_budget = self._food_budget_from_records(budget_records)
+        (agg_day, agg_week, agg_month,
+         _, week_days_elapsed,
+         __, ___, ____, _____) = self._fetch_period_aggregates()
+
+        budgets = self.get_all_budgets()
         try:
             income_records = self._income_sheet().get_all_records()
         except Exception as exc:
@@ -435,9 +528,8 @@ class SheetsManager:
         )
 
         for currency in Config.SUPPORTED_CURRENCIES:
-            expense_total, by_cat = aggregated.get(currency, (0.0, {}))
+            expense_total, by_cat = agg_month.get(currency, (0.0, {}))
             income = _income_from_records(income_records, currency, period_ym)
-
             if expense_total == 0.0 and income == 0.0:
                 continue
 
@@ -446,20 +538,13 @@ class SheetsManager:
             if income > 0:
                 lines.append(f"収入: {fmt(income, currency)}")
             lines.append(f"支出合計: {fmt(expense_total, currency)}")
-            if by_cat:
-                for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                    lines.append(f"　{cat}: {fmt(amt, currency)}")
-
-            food_total = by_cat.get("食費", 0.0)
-            food_budget_elapsed = food_budget * days_elapsed
-            if food_budget_elapsed > 0:
-                lines.append(f"食費予算: {fmt(food_budget_elapsed, currency)}  (累計{days_elapsed}日)")
-                diff = food_budget_elapsed - food_total
-                if diff >= 0:
-                    lines.append(f"✅ 食費 {fmt(diff, currency)} 節約中")
-                else:
-                    lines.append(f"⚠️ 食費 {fmt(abs(diff), currency)} オーバー")
-
+            for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
+                lines.append(f"　{cat}: {fmt(amt, currency)}")
+            lines.extend(self._build_budget_lines(
+                currency, budgets, "月",
+                agg_day, agg_week, agg_month,
+                days_elapsed, week_days_elapsed,
+            ))
             lines.append("")
             if income > 0:
                 remaining = income - expense_total
@@ -475,18 +560,31 @@ class SheetsManager:
 
     def get_monthly_report(self) -> str:
         """直前の給与期間の確定レポートを返す（給料日の定期配信用）。"""
-        today = _now().date()
+        today  = _now().date()
         payday = self.get_payday()
-        # 昨日が属する期間 = 給料日当日に実行すると直前の完了期間になる
         start, end = _get_pay_period(payday, today - timedelta(days=1))
         days_total = (end - start).days + 1
-        target_ym = start.strftime("%Y-%m")
+        target_ym  = start.strftime("%Y-%m")
 
-        records = self._get_expenses_for_dates(
-            start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        all_records = []
+        try:
+            all_records = self._expenses_sheet().get_all_records()
+        except Exception as exc:
+            print(f"[SheetsManager] get_monthly_report fetch error: {exc}")
+
+        agg_month = self._aggregate(
+            self._filter_by_dates(all_records, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
         )
-        aggregated = self._aggregate(records)
-        food_budget = self.get_food_budget()
+        # 週集計は月末の週とする（budget_lines の週予算比較用）
+        week_start = end - timedelta(days=end.weekday())
+        agg_week = self._aggregate(
+            self._filter_by_dates(all_records, week_start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        )
+        agg_day = self._aggregate(
+            self._filter_by_dates(all_records, end.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        )
+
+        budgets = self.get_all_budgets()
         try:
             income_records = self._income_sheet().get_all_records()
         except Exception as exc:
@@ -496,9 +594,8 @@ class SheetsManager:
         lines = [f"📆 **月次レポート ({start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')})**"]
 
         for currency in Config.SUPPORTED_CURRENCIES:
-            expense_total, by_cat = aggregated.get(currency, (0.0, {}))
+            expense_total, by_cat = agg_month.get(currency, (0.0, {}))
             income = _income_from_records(income_records, currency, target_ym)
-
             if expense_total == 0.0 and income == 0.0:
                 continue
 
@@ -507,20 +604,13 @@ class SheetsManager:
             if income > 0:
                 lines.append(f"収入: {fmt(income, currency)}")
             lines.append(f"支出合計: {fmt(expense_total, currency)}")
-            if by_cat:
-                for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                    lines.append(f"　{cat}: {fmt(amt, currency)}")
-
-            food_total = by_cat.get("食費", 0.0)
-            food_budget_total = food_budget * days_total
-            if food_budget_total > 0:
-                lines.append(f"食費予算: {fmt(food_budget_total, currency)}")
-                diff = food_budget_total - food_total
-                if diff >= 0:
-                    lines.append(f"✅ 食費 {fmt(diff, currency)} 節約")
-                else:
-                    lines.append(f"⚠️ 食費 {fmt(abs(diff), currency)} オーバー")
-
+            for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
+                lines.append(f"　{cat}: {fmt(amt, currency)}")
+            lines.extend(self._build_budget_lines(
+                currency, budgets, "月",
+                agg_day, agg_week, agg_month,
+                days_total, 7,
+            ))
             lines.append("")
             if income > 0:
                 savings = income - expense_total

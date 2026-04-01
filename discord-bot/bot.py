@@ -159,25 +159,62 @@ async def cmd_month(ctx: commands.Context) -> None:
 
 
 @bot.command(name="予算")
-async def cmd_budget(ctx: commands.Context, amount: str = "") -> None:
-    """食費予算（1日あたり）を表示・設定する。引数なしで表示、金額を渡すと設定。"""
+async def cmd_budget(ctx: commands.Context, *args: str) -> None:
+    """予算を表示・設定・削除する。
+    !予算                          → 全予算を表示
+    !予算 <カテゴリ> <金額> <期間>  → 予算を設定 (期間: 日|週|月)
+    !予算 削除 <カテゴリ>           → 予算を削除
+    """
     currency = sheets.get_default_currency()
-    if not amount:
-        budget = sheets.get_food_budget()
-        if budget > 0:
-            await ctx.send(f"🍚 食費予算 (1日): **{fmt(budget, currency)}**")
+
+    if not args:
+        budgets = sheets.get_all_budgets()
+        if not budgets:
+            await ctx.send(
+                "📋 予算は未設定です。\n"
+                "`!予算 <カテゴリ> <金額> <期間>` で設定できます。\n"
+                "例: `!予算 食費 1000 日` / `!予算 家賃 80000 月`"
+            )
+            return
+        lines = ["📋 **設定中の予算**"]
+        for cat, (amt, period) in sorted(budgets.items()):
+            lines.append(f"　{cat}: {fmt(amt, currency)} / {period}")
+        await ctx.send("\n".join(lines))
+        return
+
+    if args[0] == "削除":
+        if len(args) < 2:
+            await ctx.send("⚠️ カテゴリを指定してください。例: `!予算 削除 食費`")
+            return
+        category = args[1]
+        success = sheets.delete_budget(category)
+        if success:
+            await ctx.send(f"🗑️ **{category}** の予算を削除しました。")
         else:
-            await ctx.send(f"🍚 食費予算: 未設定\n`!予算 <金額>` で設定できます。")
+            await ctx.send(f"⚠️ **{category}** の予算が見つかりませんでした。")
         return
 
-    value = float_or_none(amount)
+    if len(args) < 3:
+        await ctx.send(
+            "⚠️ 引数が不足しています。\n"
+            "例: `!予算 食費 1000 日` / `!予算 家賃 80000 月`"
+        )
+        return
+
+    category, amount_str, period = args[0], args[1], args[2]
+    if period not in SheetsManager.VALID_PERIODS:
+        await ctx.send("⚠️ 期間は `日` `週` `月` のいずれかで指定してください。")
+        return
+    value = float_or_none(amount_str)
     if value is None or value <= 0:
-        await ctx.send("⚠️ 正しい金額を入力してください。例: `!予算 1000`")
+        await ctx.send("⚠️ 正しい金額を入力してください。例: `!予算 食費 1000 日`")
         return
 
-    success, error_msg = sheets.set_food_budget(value)
+    success, error_msg = sheets.set_budget(category, value, period)
     if success:
-        await ctx.send(f"✅ 食費予算 (1日) を **{fmt(value, currency)}** に設定しました。")
+        await ctx.send(
+            f"✅ **{category}** の予算を **{fmt(value, currency)} / {period}** に設定しました。"
+        )
     else:
         await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
@@ -302,8 +339,11 @@ async def cmd_help(ctx: commands.Context) -> None:
         "```",
         "**⚙️ 設定・確認**",
         "```",
-        "!予算                  1日の予算を表示",
-        f"!予算 <金額>           1日の予算を設定    例: !予算 30",
+        "!予算                          全予算を表示",
+        "!予算 <カテゴリ> <金額> <期間>  予算を設定 (期間: 日|週|月)",
+        "!予算 削除 <カテゴリ>           予算を削除",
+        "                               例: !予算 食費 1000 日",
+        "                               例: !予算 家賃 80000 月",
         "!収入                  今月の収入を表示",
         f"!収入 <金額> [通貨]    今月の収入を登録   例: !収入 1960 {cur}",
         "!給料日                給料日を表示",
