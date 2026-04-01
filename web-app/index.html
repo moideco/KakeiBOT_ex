@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>家計入力</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <header>
+      <span class="app-title">家計入力</span>
+      <a href="settings.html" class="icon-btn" title="設定">⚙</a>
+    </header>
+
+    <!-- Display -->
+    <div class="display">
+      <div class="currency-label" id="currencyLabel"></div>
+      <div class="amount-display" id="amountDisplay">0</div>
+      <div class="category-display" id="categoryDisplay">カテゴリなし</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Categories -->
+    <div class="category-section" id="categorySection"></div>
+
+    <div class="divider"></div>
+
+    <!-- Numpad -->
+    <div class="numpad">
+      <button class="btn btn-utility" onclick="clearDisplay()">C</button>
+      <button class="btn btn-utility" onclick="backspace()">⌫</button>
+      <button class="btn btn-utility" onclick="toggleSign()">±</button>
+
+      <button class="btn btn-number" onclick="appendDigit('7')">7</button>
+      <button class="btn btn-number" onclick="appendDigit('8')">8</button>
+      <button class="btn btn-number" onclick="appendDigit('9')">9</button>
+
+      <button class="btn btn-number" onclick="appendDigit('4')">4</button>
+      <button class="btn btn-number" onclick="appendDigit('5')">5</button>
+      <button class="btn btn-number" onclick="appendDigit('6')">6</button>
+
+      <button class="btn btn-number" onclick="appendDigit('1')">1</button>
+      <button class="btn btn-number" onclick="appendDigit('2')">2</button>
+      <button class="btn btn-number" onclick="appendDigit('3')">3</button>
+
+      <button class="btn btn-number"  onclick="appendDecimal()">.</button>
+      <button class="btn btn-number"  onclick="appendDigit('0')">0</button>
+      <button class="btn btn-send" id="btnSend" onclick="send()">送信</button>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

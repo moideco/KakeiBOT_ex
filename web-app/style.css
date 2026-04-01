@@ -1,0 +1,271 @@
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Base ── */
+body {
+  background: #1c1c1e;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  height: 100%;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+
+.app-title { font-size: 18px; font-weight: 600; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 4px;
+}
+
+.back-btn { font-size: 18px; }
+
+/* ── Display ── */
+.display {
+  padding: 6px 16px 4px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.currency-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.currency-label {
+  font-size: 13px;
+  color: #8e8e93;
+  margin-bottom: 4px;
+}
+
+.currency-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.currency-btn {
+  background: transparent;
+  border: 1px solid #636366;
+  color: #8e8e93;
+  padding: 5px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.currency-btn.active {
+  background: #636366;
+  color: #fff;
+}
+
+.amount-display {
+  font-size: 52px;
+  font-weight: 200;
+  text-align: right;
+  color: #fff;
+  word-break: break-all;
+  min-height: 60px;
+  line-height: 1.1;
+}
+
+.category-display {
+  font-size: 14px;
+  text-align: right;
+  color: #8e8e93;
+  padding-bottom: 4px;
+  min-height: 20px;
+}
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: #38383a;
+  flex-shrink: 0;
+}
+
+/* ── Category chips (main) ── */
+.category-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  flex-shrink: 0;
+}
+
+.category-chip {
+  background: #3a3a3c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.category-chip.selected {
+  background: #6200ee;
+}
+
+.category-chip:active { opacity: 0.7; }
+
+/* ── Numpad ── */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  font-size: 26px;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-number  { background: #3a3a3c; }
+.btn-utility { background: #636366; font-size: 20px; }
+.btn-send    { background: #6200ee; font-size: 18px; }
+
+.btn:active  { opacity: 0.6; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Settings page ── */
+.settings-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.settings-label {
+  display: block;
+  font-size: 13px;
+  color: #8e8e93;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-input {
+  width: 100%;
+  background: #2c2c2e;
+  border: 1px solid #38383a;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.settings-input:focus { border-color: #6200ee; }
+
+.settings-hint {
+  font-size: 12px;
+  color: #636366;
+  margin-top: 4px;
+}
+
+/* ── Category edit chips ── */
+.chips-edit-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #3a3a3c;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+.chip-edit button {
+  background: none;
+  border: none;
+  color: #8e8e93;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.chip-edit button:hover { color: #ff453a; }
+
+/* ── Add category row ── */
+.add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.add-input { flex: 1; width: auto; }
+
+.btn-add {
+  background: #3a3a3c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-add:hover { background: #48484a; }
+
+/* ── Save button ── */
+.btn-save {
+  width: 100%;
+  background: #6200ee;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 17px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.btn-save:hover { background: #7722ff; }

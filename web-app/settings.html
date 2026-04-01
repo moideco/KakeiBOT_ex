@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>設定 - 家計入力</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <header>
+      <a href="index.html" class="icon-btn back-btn">‹ 戻る</a>
+      <span class="app-title">設定</span>
+      <span></span>
+    </header>
+
+    <div class="settings-body">
+
+      <!-- Webhook URL -->
+      <section class="settings-section">
+        <label class="settings-label">Discord Webhook URL</label>
+        <input type="url" id="webhookInput"
+               placeholder="https://discord.com/api/webhooks/..."
+               class="settings-input" />
+        <p class="settings-hint">Discord › チャンネル設定 › 連携サービス › ウェブフック から取得</p>
+      </section>
+
+      <!-- Currency -->
+      <section class="settings-section">
+        <label class="settings-label">通貨</label>
+        <div class="currency-toggle">
+          <button class="currency-btn" id="btnJpy" onclick="setCurrency('JPY')">¥ JPY</button>
+          <button class="currency-btn" id="btnUsd" onclick="setCurrency('USD')">$ USD</button>
+        </div>
+      </section>
+
+      <!-- Categories -->
+      <section class="settings-section">
+        <label class="settings-label">カテゴリ</label>
+        <div id="categoriesChips" class="chips-edit-group"></div>
+        <div class="add-row">
+          <input type="text" id="newCategoryInput"
+                 placeholder="新しいカテゴリ名"
+                 class="settings-input add-input" />
+          <button onclick="addCategory()" class="btn-add">追加</button>
+        </div>
+      </section>
+
+      <button onclick="saveSettings()" class="btn-save">保存</button>
+
+    </div>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>
