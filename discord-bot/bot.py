@@ -87,11 +87,12 @@ async def on_message(message: discord.Message) -> None:
         return
 
     content = message.content.strip()
+    default_currency = sheets.get_default_currency()
 
     income_match = INCOME_PATTERN.match(content)
     if income_match:
         amount   = float(income_match.group(1))
-        currency = (income_match.group(2) or Config.DEFAULT_CURRENCY).upper()
+        currency = (income_match.group(2) or default_currency).upper()
         success, error_msg = sheets.set_income(amount, currency)
         if success:
             await message.add_reaction("✅")
@@ -104,13 +105,13 @@ async def on_message(message: discord.Message) -> None:
     if match:
         amount = float(match.group(1))
         category = match.group(2).strip()
-        currency = (match.group(3) or Config.DEFAULT_CURRENCY).upper()
+        currency = (match.group(3) or default_currency).upper()
     else:
         match = AMOUNT_ONLY_PATTERN.match(content)
         if match:
             amount = float(match.group(1))
             category = DEFAULT_CATEGORY
-            currency = (match.group(2) or Config.DEFAULT_CURRENCY).upper()
+            currency = (match.group(2) or default_currency).upper()
         else:
             await bot.process_commands(message)
             return
@@ -218,19 +219,31 @@ async def cmd_payday(ctx: commands.Context, day: str = "") -> None:
 
 
 @bot.command(name="通貨")
-async def cmd_currency(ctx: commands.Context) -> None:
-    """利用可能な通貨の一覧と使い方を表示する。"""
+async def cmd_currency(ctx: commands.Context, currency: str = "") -> None:
+    """通貨を表示・変更する。引数なしで現在の設定を表示、通貨コードを渡すと変更。"""
     currencies = ", ".join(Config.SUPPORTED_CURRENCIES)
-    lines = [
-        f"💱 **利用可能な通貨**: {currencies}",
-        f"デフォルト: **{Config.DEFAULT_CURRENCY}**",
-        "",
-        "**使い方:**",
-        "　`560 家賃` → JPY (省略時デフォルト)",
-        "　`10.26 食費 USD` → USD",
-        "　`1200 光熱費 JPY` → JPY (明示)",
-    ]
-    await ctx.send("\n".join(lines))
+    current = sheets.get_default_currency()
+
+    if not currency:
+        lines = [
+            f"💱 **現在のデフォルト通貨**: {current}",
+            f"利用可能: {currencies}",
+            "",
+            f"`!通貨 JPY` または `!通貨 USD` で変更できます。",
+        ]
+        await ctx.send("\n".join(lines))
+        return
+
+    currency = currency.upper()
+    if currency not in Config.SUPPORTED_CURRENCIES:
+        await ctx.send(f"⚠️ `{currency}` は未対応です。使用可能: {currencies}")
+        return
+
+    success, error_msg = sheets.set_default_currency(currency)
+    if success:
+        await ctx.send(f"✅ デフォルト通貨を **{currency}** に変更しました。")
+    else:
+        await ctx.send(f"❌ 変更に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="収入")

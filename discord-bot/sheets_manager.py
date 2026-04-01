@@ -217,6 +217,35 @@ class SheetsManager:
             print(f"[SheetsManager] set_payday error: {exc}")
             return False, str(exc)
 
+    def get_default_currency(self) -> str:
+        """スプレッドシートに保存されたデフォルト通貨を返す。未設定の場合は Config の値。"""
+        try:
+            records = self._budget_sheet().get_all_records()
+            for row in records:
+                if str(row.get("項目", "")).strip() == "デフォルト通貨":
+                    val = str(row.get("金額", "")).strip().upper()
+                    if val in Config.SUPPORTED_CURRENCIES:
+                        return val
+        except Exception as exc:
+            print(f"[SheetsManager] get_default_currency error: {exc}")
+        return Config.DEFAULT_CURRENCY
+
+    def set_default_currency(self, currency: str) -> tuple[bool, str]:
+        """デフォルト通貨をスプレッドシートに保存する。"""
+        currency = currency.upper()
+        try:
+            sheet = self._budget_sheet()
+            records = sheet.get_all_records()
+            for i, row in enumerate(records, start=2):
+                if str(row.get("項目", "")).strip() == "デフォルト通貨":
+                    sheet.update(f"B{i}", [[currency]])
+                    return True, ""
+            sheet.append_row(["デフォルト通貨", currency], value_input_option="USER_ENTERED")
+            return True, ""
+        except Exception as exc:
+            print(f"[SheetsManager] set_default_currency error: {exc}")
+            return False, str(exc)
+
     def delete_expense(self, amount: float, category: str, currency: str) -> bool:
         """条件に一致する最新の支出行を削除する。見つからなければ False を返す。"""
         try:
