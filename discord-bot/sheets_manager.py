@@ -366,27 +366,18 @@ class SheetsManager:
                 agg = agg_day if report_period == "日" else (
                     agg_week if report_period == "週" else agg_month
                 )
-                label = f"{cat}予算({budget_period}{fmt(budget_amt, currency)}×{int(effective_budget/budget_amt)}日)"
             elif budget_period == "週":
                 effective_budget = budget_amt
                 agg = agg_week
-                label = f"{cat}予算({budget_period})"
-                if report_period == "月":
-                    # 月レポートでは週予算の残りを週単位で表示
-                    label = f"{cat}予算(週{fmt(budget_amt, currency)})"
             else:  # 月
                 effective_budget = budget_amt
                 agg = agg_month
-                label = f"{cat}予算({budget_period})"
 
             spent = agg.get(currency, (0.0, {}))[1].get(cat, 0.0)
             diff  = effective_budget - spent
             sign  = "✅" if diff >= 0 else "⚠️"
-            word  = "残" if diff >= 0 else "オーバー"
-            lines.append(
-                f"{sign} {label} {fmt(effective_budget, currency)}: "
-                f"{fmt(abs(diff), currency)} {word}"
-            )
+            word  = "節約" if diff >= 0 else "オーバー"
+            lines.append(f"{sign} {cat}：{fmt(abs(diff), currency)} {word}")
         return lines
 
     # ------------------------------------------------------------------
@@ -436,22 +427,28 @@ class SheetsManager:
          today_str, week_start_str, month_start_str, _) = self._fetch_period_aggregates()
 
         budgets = self.get_all_budgets()
-        lines   = [f"📊 **{now.strftime('%Y年%m月%d日')}の支出レポート**"]
+        lines   = ["📊 **本日の支出**"]
 
+        first_block = True
         for currency in Config.SUPPORTED_CURRENCIES:
             if currency not in agg_day:
                 continue
+            if not first_block:
+                lines.append("")
+            first_block = False
             total, by_cat = agg_day[currency]
-            lines.append("")
-            lines.append(f"**[{currency}]**")
-            lines.append(f"支出合計: {fmt(total, currency)}")
             for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                lines.append(f"　{cat}: {fmt(amt, currency)}")
-            lines.extend(self._build_budget_lines(
+                lines.append(f"{cat}：{fmt(amt, currency)}")
+            lines.append("──────────────")
+            lines.append(f"合計：{fmt(total, currency)}")
+            budget_lines = self._build_budget_lines(
                 currency, budgets, "日",
                 agg_day, agg_week, agg_month,
                 days_elapsed, week_days_elapsed,
-            ))
+            )
+            if budget_lines:
+                lines.append("")
+                lines.extend(budget_lines)
 
         if not agg_day:
             lines.append("本日の支出はありません。")
@@ -468,23 +465,31 @@ class SheetsManager:
          today_str, week_start_str, month_start_str, _) = self._fetch_period_aggregates()
 
         budgets = self.get_all_budgets()
-        lines   = [f"📅 **今週の支出レポート**"]
-        lines.append(f"期間: {week_start.strftime('%m/%d')} 〜 {week_end.strftime('%m/%d')}")
+        lines   = [
+            "📅 **今週の支出**",
+            f"期間: {week_start.strftime('%m/%d')} 〜 {week_end.strftime('%m/%d')}",
+        ]
 
+        first_block = True
         for currency in Config.SUPPORTED_CURRENCIES:
             if currency not in agg_week:
                 continue
+            if not first_block:
+                lines.append("")
+            first_block = False
             total, by_cat = agg_week[currency]
-            lines.append("")
-            lines.append(f"**[{currency}]**")
-            lines.append(f"支出合計: {fmt(total, currency)}")
             for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                lines.append(f"　{cat}: {fmt(amt, currency)}")
-            lines.extend(self._build_budget_lines(
+                lines.append(f"{cat}：{fmt(amt, currency)}")
+            lines.append("──────────────")
+            lines.append(f"合計：{fmt(total, currency)}")
+            budget_lines = self._build_budget_lines(
                 currency, budgets, "週",
                 agg_day, agg_week, agg_month,
                 days_elapsed, week_days_elapsed,
-            ))
+            )
+            if budget_lines:
+                lines.append("")
+                lines.extend(budget_lines)
 
         if not agg_week:
             lines.append("今週の支出はありません。")
@@ -512,37 +517,42 @@ class SheetsManager:
             income_records = []
 
         period_ym = start.strftime("%Y-%m")
-        lines = [f"📊 **今月の支出レポート**"]
-        lines.append(
-            f"期間: {start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')}"
-            f"　({days_elapsed}/{days_total}日経過)"
-        )
+        lines = [
+            "📊 **今月の支出**",
+            f"期間: {start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')}　({days_elapsed}/{days_total}日経過)",
+        ]
 
+        first_block = True
         for currency in Config.SUPPORTED_CURRENCIES:
             expense_total, by_cat = agg_month.get(currency, (0.0, {}))
             income = _income_from_records(income_records, currency, period_ym)
             if expense_total == 0.0 and income == 0.0:
                 continue
 
-            lines.append("")
-            lines.append(f"**[{currency}]**")
+            if not first_block:
+                lines.append("")
+            first_block = False
             if income > 0:
-                lines.append(f"収入: {fmt(income, currency)}")
-            lines.append(f"支出合計: {fmt(expense_total, currency)}")
+                lines.append(f"収入：{fmt(income, currency)}")
             for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                lines.append(f"　{cat}: {fmt(amt, currency)}")
-            lines.extend(self._build_budget_lines(
+                lines.append(f"{cat}：{fmt(amt, currency)}")
+            lines.append("──────────────")
+            lines.append(f"合計：{fmt(expense_total, currency)}")
+            budget_lines = self._build_budget_lines(
                 currency, budgets, "月",
                 agg_day, agg_week, agg_month,
                 days_elapsed, week_days_elapsed,
-            ))
-            lines.append("")
+            )
+            if budget_lines:
+                lines.append("")
+                lines.extend(budget_lines)
             if income > 0:
                 remaining = income - expense_total
+                lines.append("")
                 if remaining >= 0:
-                    lines.append(f"💰 残り使える額: **{fmt(remaining, currency)}**")
+                    lines.append(f"💰 残り使える額：**{fmt(remaining, currency)}**")
                 else:
-                    lines.append(f"⚠️ 収入オーバー: **{fmt(abs(remaining), currency)}**")
+                    lines.append(f"⚠️ 収入オーバー：**{fmt(abs(remaining), currency)}**")
 
         if len(lines) == 2:
             lines.append("支出はありません。")
@@ -584,31 +594,37 @@ class SheetsManager:
 
         lines = [f"📆 **月次レポート ({start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')})**"]
 
+        first_block = True
         for currency in Config.SUPPORTED_CURRENCIES:
             expense_total, by_cat = agg_month.get(currency, (0.0, {}))
             income = _income_from_records(income_records, currency, target_ym)
             if expense_total == 0.0 and income == 0.0:
                 continue
 
-            lines.append("")
-            lines.append(f"**[{currency}]**")
+            if not first_block:
+                lines.append("")
+            first_block = False
             if income > 0:
-                lines.append(f"収入: {fmt(income, currency)}")
-            lines.append(f"支出合計: {fmt(expense_total, currency)}")
+                lines.append(f"収入：{fmt(income, currency)}")
             for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
-                lines.append(f"　{cat}: {fmt(amt, currency)}")
-            lines.extend(self._build_budget_lines(
+                lines.append(f"{cat}：{fmt(amt, currency)}")
+            lines.append("──────────────")
+            lines.append(f"合計：{fmt(expense_total, currency)}")
+            budget_lines = self._build_budget_lines(
                 currency, budgets, "月",
                 agg_day, agg_week, agg_month,
                 days_total, 7,
-            ))
-            lines.append("")
+            )
+            if budget_lines:
+                lines.append("")
+                lines.extend(budget_lines)
             if income > 0:
+                lines.append("")
                 savings = income - expense_total
                 if savings >= 0:
-                    lines.append(f"💰 今月の貯金: **{fmt(savings, currency)}**")
+                    lines.append(f"💰 今月の貯金：**{fmt(savings, currency)}**")
                 else:
-                    lines.append(f"⚠️ 収入オーバー: **{fmt(abs(savings), currency)}**")
+                    lines.append(f"⚠️ 収入オーバー：**{fmt(abs(savings), currency)}**")
 
         if len(lines) == 1:
             lines.append("先月の支出・収入はありません。")
