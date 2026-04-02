@@ -370,6 +370,7 @@ async def cmd_update(ctx: commands.Context) -> None:
             cwd="/home/s1675dis/KakeiBOT_ex",
         )
         output = result.stdout.strip() or result.stderr.strip() or "(出力なし)"
+        output = output[:1900]  # Discord の 2000 文字制限に収める
         await ctx.send(f"```{output}```")
     except Exception as e:
         await ctx.send(f"❌ git pull 失敗: {e}")
