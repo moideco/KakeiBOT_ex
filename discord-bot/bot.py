@@ -219,34 +219,6 @@ async def cmd_budget(ctx: commands.Context, *args: str) -> None:
         await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
 
-@bot.command(name="週報曜日")
-async def cmd_weekly_day(ctx: commands.Context, day: str = "") -> None:
-    """週次レポートを送る曜日を表示・設定する。
-    使い方: !週報曜日 → 現在の設定を表示
-            !週報曜日 日 → 毎週日曜日に設定 (月/火/水/木/金/土/日)
-    """
-    day_names = SheetsManager._WEEKDAY_NAMES  # ("月", "火", ..., "日")
-
-    if not day:
-        current = sheets.get_weekly_report_day()
-        await ctx.send(
-            f"📅 週次レポート送信曜日: **{day_names[current]}曜日**\n"
-            f"`!週報曜日 <曜日>` で変更できます。例: `!週報曜日 月`"
-        )
-        return
-
-    if day not in day_names:
-        await ctx.send(f"⚠️ `{day}` は無効です。月/火/水/木/金/土/日 のいずれかで指定してください。")
-        return
-
-    day_int = day_names.index(day)
-    success, error_msg = sheets.set_weekly_report_day(day_int)
-    if success:
-        await ctx.send(f"✅ 週次レポートの送信曜日を **{day}曜日** に設定しました。")
-    else:
-        await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
-
-
 @bot.command(name="給料日")
 async def cmd_payday(ctx: commands.Context, day: str = "") -> None:
     """給料日を表示・設定する。
@@ -376,8 +348,6 @@ async def cmd_help(ctx: commands.Context) -> None:
         f"!収入 <金額> [通貨]    今月の収入を登録   例: !収入 1960 {cur}",
         "!給料日                給料日を表示",
         "!給料日 <日>           給料日を設定       例: !給料日 15",
-        "!週報曜日              週次レポートの送信曜日を表示",
-        "!週報曜日 <曜日>       送信曜日を設定     例: !週報曜日 月",
         "!通貨                  使用可能な通貨を確認",
         "```",
     ]
@@ -444,8 +414,8 @@ async def daily_report() -> None:
     )
 )
 async def weekly_report() -> None:
-    """毎週設定曜日に週次レポートを送信する。"""
-    if datetime.now(jst).weekday() != sheets.get_weekly_report_day():
+    """毎週日曜日に週次レポートを送信する。"""
+    if datetime.now(jst).weekday() != 6:  # 6 = Sunday
         return
     channel = bot.get_channel(Config.REPORT_CHANNEL_ID)
     if channel:
