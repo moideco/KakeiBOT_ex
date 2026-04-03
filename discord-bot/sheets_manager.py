@@ -226,6 +226,36 @@ class SheetsManager:
             print(f"[SheetsManager] delete_budget error: {exc}")
         return False
 
+    _WEEKDAY_NAMES = ("月", "火", "水", "木", "金", "土", "日")
+
+    def get_weekly_report_day(self) -> int:
+        """週次レポートを送る曜日 (0=月〜6=日) を返す。未設定の場合は 6 (日曜)。"""
+        try:
+            records = self._budget_sheet().get_all_records()
+            for row in records:
+                if str(row.get("項目", "")).strip() == "週報曜日":
+                    val = int(row.get("金額", 6))
+                    return max(0, min(6, val))
+        except Exception as exc:
+            print(f"[SheetsManager] get_weekly_report_day error: {exc}")
+        return 6
+
+    def set_weekly_report_day(self, day: int) -> tuple[bool, str]:
+        """週次レポートを送る曜日 (0=月〜6=日) を保存する。"""
+        day = max(0, min(6, day))
+        try:
+            sheet = self._budget_sheet()
+            records = sheet.get_all_records()
+            for i, row in enumerate(records, start=2):
+                if str(row.get("項目", "")).strip() == "週報曜日":
+                    sheet.update(f"B{i}", [[day]])
+                    return True, ""
+            sheet.append_row(["週報曜日", day], value_input_option="USER_ENTERED")
+            return True, ""
+        except Exception as exc:
+            print(f"[SheetsManager] set_weekly_report_day error: {exc}")
+            return False, str(exc)
+
     def get_payday(self) -> int:
         """給料日 (1〜31) を返す。未設定の場合は 1。"""
         try:
