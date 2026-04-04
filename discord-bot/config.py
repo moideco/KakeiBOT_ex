@@ -20,7 +20,7 @@ class Config:
     WEEKLY_REPORT_HOUR: int = int(os.getenv("WEEKLY_REPORT_HOUR", "20"))
     WEEKLY_REPORT_MINUTE: int = int(os.getenv("WEEKLY_REPORT_MINUTE", "0"))
 
-    # 月次レポートの時刻 (JST, 24h, 毎月1日に送信)
+    # 月次レポートの時刻 (JST, 24h, 給料日に送信)
     MONTHLY_REPORT_HOUR: int = int(os.getenv("MONTHLY_REPORT_HOUR", "9"))
     MONTHLY_REPORT_MINUTE: int = int(os.getenv("MONTHLY_REPORT_MINUTE", "0"))
 

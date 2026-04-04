@@ -349,9 +349,67 @@ async def cmd_help(ctx: commands.Context) -> None:
         "!給料日                給料日を表示",
         "!給料日 <日>           給料日を設定       例: !給料日 15",
         "!通貨                  使用可能な通貨を確認",
+        "!報告                    定時報告のON/OFF状態を表示",
+        "!報告 今日 on/off        毎日: 今日の支出",
+        "!報告 今週毎日 on/off    毎日: 今週の支出",
+        "!報告 今月毎日 on/off    毎日: 今月の支出",
+        "!報告 今週 on/off        毎週日曜: 今週レポート",
+        "!報告 今月 on/off        毎月給料日: 今月レポート",
         "```",
     ]
     await ctx.send("\n".join(lines))
+
+
+@bot.command(name="報告")
+async def cmd_report_toggle(ctx: commands.Context, *args: str) -> None:
+    """定時報告のON/OFFを設定する。
+    !報告                  → 現在の設定を表示
+    !報告 今日 on/off      → 毎日: 今日の支出をON/OFF
+    !報告 今週毎日 on/off  → 毎日: 今週の支出をON/OFF
+    !報告 今月毎日 on/off  → 毎日: 今月の支出をON/OFF
+    !報告 今週 on/off      → 毎週日曜: 今週レポートをON/OFF
+    !報告 今月 on/off      → 毎月給料日: 今月レポートをON/OFF
+    """
+    # label → (スプレッドシートキー, 表示説明)
+    _label_map: dict[str, tuple[str, str]] = {
+        "今日":     ("日次",      "毎日 今日の支出"),
+        "今週毎日": ("日次_今週", "毎日 今週の支出"),
+        "今月毎日": ("日次_今月", "毎日 今月の支出"),
+        "今週":     ("週次",      "毎週日曜 今週レポート"),
+        "今月":     ("月次",      "毎月給料日 今月レポート"),
+    }
+
+    if not args:
+        lines = ["📢 **定時報告の設定**"]
+        for label, (rtype, desc) in _label_map.items():
+            status = "✅ ON" if sheets.get_report_enabled(rtype) else "❌ OFF"
+            lines.append(f"　{label} ({desc}): {status}")
+        lines.append("")
+        lines.append("`!報告 今日 off` のように変更できます。")
+        await ctx.send("\n".join(lines))
+        return
+
+    if len(args) < 2:
+        await ctx.send("⚠️ 使い方: `!報告 今日 on` / `!報告 今週毎日 off`")
+        return
+
+    label, state_str = args[0], args[1].lower()
+    if label not in _label_map:
+        keys = " ".join(f"`{k}`" for k in _label_map)
+        await ctx.send(f"⚠️ `{label}` は無効です。{keys} のいずれかを指定してください。")
+        return
+    if state_str not in ("on", "off"):
+        await ctx.send("⚠️ `on` または `off` を指定してください。")
+        return
+
+    rtype, desc = _label_map[label]
+    enabled = state_str == "on"
+    success, error_msg = sheets.set_report_enabled(rtype, enabled)
+    if success:
+        status = "✅ ON" if enabled else "❌ OFF"
+        await ctx.send(f"📢 {desc}の定時報告を **{status}** にしました。")
+    else:
+        await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="update")
@@ -400,10 +458,16 @@ def float_or_none(value: str) -> float | None:
     )
 )
 async def daily_report() -> None:
-    """毎日設定時刻に日次レポートを送信する。"""
+    """毎日設定時刻に日次・今週・今月レポートを送信する（各ON/OFF設定に従う）。"""
     channel = bot.get_channel(Config.REPORT_CHANNEL_ID)
-    if channel:
+    if not channel:
+        return
+    if sheets.get_report_enabled("日次"):
         await channel.send(sheets.get_daily_report())
+    if sheets.get_report_enabled("日次_今週"):
+        await channel.send(sheets.get_weekly_report())
+    if sheets.get_report_enabled("日次_今月"):
+        await channel.send(sheets.get_current_period_report())
 
 
 @tasks.loop(
@@ -415,6 +479,8 @@ async def daily_report() -> None:
 )
 async def weekly_report() -> None:
     """毎週日曜日に週次レポートを送信する。"""
+    if not sheets.get_report_enabled("週次"):
+        return
     if datetime.now(jst).weekday() != 6:  # 6 = Sunday
         return
     channel = bot.get_channel(Config.REPORT_CHANNEL_ID)
@@ -431,6 +497,8 @@ async def weekly_report() -> None:
 )
 async def monthly_report() -> None:
     """給料日に前期間の月次レポートを送信する。"""
+    if not sheets.get_report_enabled("月次"):
+        return
     if datetime.now(jst).day != sheets.get_payday():
         return
     channel = bot.get_channel(Config.REPORT_CHANNEL_ID)

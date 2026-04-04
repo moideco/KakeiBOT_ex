@@ -282,6 +282,42 @@ class SheetsManager:
             print(f"[SheetsManager] set_default_currency error: {exc}")
             return False, str(exc)
 
+    # ------------------------------------------------------------------
+    # 定時報告 ON/OFF (日次|週次|月次)
+    # 保存形式: 報告_{report_type}  値: 1=ON, 0=OFF
+    # ------------------------------------------------------------------
+
+    REPORT_TYPES = ("日次", "週次", "月次")
+
+    def get_report_enabled(self, report_type: str) -> bool:
+        """定時報告の有効/無効を返す。未設定の場合は True (有効)。"""
+        key = f"報告_{report_type}"
+        try:
+            records = self._budget_sheet().get_all_records()
+            for row in records:
+                if str(row.get("項目", "")).strip() == key:
+                    return str(row.get("金額", "1")).strip() != "0"
+        except Exception as exc:
+            print(f"[SheetsManager] get_report_enabled error: {exc}")
+        return True
+
+    def set_report_enabled(self, report_type: str, enabled: bool) -> tuple[bool, str]:
+        """定時報告の有効/無効をスプレッドシートに保存する。"""
+        key = f"報告_{report_type}"
+        value = 1 if enabled else 0
+        try:
+            sheet = self._budget_sheet()
+            records = sheet.get_all_records()
+            for i, row in enumerate(records, start=2):
+                if str(row.get("項目", "")).strip() == key:
+                    sheet.update(f"B{i}", [[value]])
+                    return True, ""
+            sheet.append_row([key, value], value_input_option="USER_ENTERED")
+            return True, ""
+        except Exception as exc:
+            print(f"[SheetsManager] set_report_enabled error: {exc}")
+            return False, str(exc)
+
     def delete_expense(self, amount: float, category: str, currency: str) -> bool:
         """条件に一致する最新の支出行を削除する。見つからなければ False を返す。"""
         try:
