@@ -49,6 +49,25 @@ _JST_FIXED = timezone(timedelta(hours=9))  # tasks.loop の time() 用 (pytz は
 
 
 # ------------------------------------------------------------------
+# ヘルパー
+# ------------------------------------------------------------------
+
+
+async def _reply_thread(ctx: commands.Context) -> discord.abc.Messageable:
+    """コマンドの返信先を返す。
+    スレッド外: コマンドメッセージにスレッドを作成して返す。
+    スレッド内: そのスレッドをそのまま返す。
+    スレッド作成に失敗した場合はチャンネルにフォールバック。
+    """
+    if isinstance(ctx.channel, discord.Thread):
+        return ctx.channel
+    try:
+        return await ctx.message.create_thread(name=ctx.invoked_with[:100])
+    except discord.HTTPException:
+        return ctx.channel
+
+
+# ------------------------------------------------------------------
 # イベント
 # ------------------------------------------------------------------
 
@@ -143,19 +162,22 @@ async def on_message(message: discord.Message) -> None:
 @bot.command(name="今日")
 async def cmd_today(ctx: commands.Context) -> None:
     """本日の支出レポートを表示する。"""
-    await ctx.send(sheets.get_daily_report())
+    ch = await _reply_thread(ctx)
+    await ch.send(sheets.get_daily_report())
 
 
 @bot.command(name="今週")
 async def cmd_week(ctx: commands.Context) -> None:
     """今週の支出レポートを表示する。"""
-    await ctx.send(sheets.get_weekly_report())
+    ch = await _reply_thread(ctx)
+    await ch.send(sheets.get_weekly_report())
 
 
 @bot.command(name="今月")
 async def cmd_month(ctx: commands.Context) -> None:
     """今月（現在の給与期間）の進行中レポートを表示する。"""
-    await ctx.send(sheets.get_current_period_report())
+    ch = await _reply_thread(ctx)
+    await ch.send(sheets.get_current_period_report())
 
 
 @bot.command(name="予算")
@@ -165,12 +187,13 @@ async def cmd_budget(ctx: commands.Context, *args: str) -> None:
     !予算 <カテゴリ> <金額> <期間>  → 予算を設定 (期間: 日|週|月)
     !予算 削除 <カテゴリ>           → 予算を削除
     """
+    ch = await _reply_thread(ctx)
     currency = sheets.get_default_currency()
 
     if not args:
         budgets = sheets.get_all_budgets()
         if not budgets:
-            await ctx.send(
+            await ch.send(
                 "📋 予算は未設定です。\n"
                 "`!予算 <カテゴリ> <金額> <期間>` で設定できます。\n"
                 "例: `!予算 食費 1000 日` / `!予算 家賃 80000 月`"
@@ -179,23 +202,23 @@ async def cmd_budget(ctx: commands.Context, *args: str) -> None:
         lines = ["📋 **設定中の予算**"]
         for cat, (amt, period) in sorted(budgets.items()):
             lines.append(f"　{cat}: {fmt(amt, currency)} / {period}")
-        await ctx.send("\n".join(lines))
+        await ch.send("\n".join(lines))
         return
 
     if args[0] == "削除":
         if len(args) < 2:
-            await ctx.send("⚠️ カテゴリを指定してください。例: `!予算 削除 食費`")
+            await ch.send("⚠️ カテゴリを指定してください。例: `!予算 削除 食費`")
             return
         category = args[1]
         success = sheets.delete_budget(category)
         if success:
-            await ctx.send(f"🗑️ **{category}** の予算を削除しました。")
+            await ch.send(f"🗑️ **{category}** の予算を削除しました。")
         else:
-            await ctx.send(f"⚠️ **{category}** の予算が見つかりませんでした。")
+            await ch.send(f"⚠️ **{category}** の予算が見つかりませんでした。")
         return
 
     if len(args) < 3:
-        await ctx.send(
+        await ch.send(
             "⚠️ 引数が不足しています。\n"
             "例: `!予算 食費 1000 日` / `!予算 家賃 80000 月`"
         )
@@ -203,20 +226,20 @@ async def cmd_budget(ctx: commands.Context, *args: str) -> None:
 
     category, amount_str, period = args[0], args[1], args[2]
     if period not in SheetsManager.VALID_PERIODS:
-        await ctx.send("⚠️ 期間は `日` `週` `月` のいずれかで指定してください。")
+        await ch.send("⚠️ 期間は `日` `週` `月` のいずれかで指定してください。")
         return
     value = float_or_none(amount_str)
     if value is None or value <= 0:
-        await ctx.send("⚠️ 正しい金額を入力してください。例: `!予算 食費 1000 日`")
+        await ch.send("⚠️ 正しい金額を入力してください。例: `!予算 食費 1000 日`")
         return
 
     success, error_msg = sheets.set_budget(category, value, period)
     if success:
-        await ctx.send(
+        await ch.send(
             f"✅ **{category}** の予算を **{fmt(value, currency)} / {period}** に設定しました。"
         )
     else:
-        await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
+        await ch.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="給料日")
@@ -225,10 +248,12 @@ async def cmd_payday(ctx: commands.Context, day: str = "") -> None:
     使い方: !給料日 → 現在の設定を表示
             !給料日 15 → 毎月15日に設定
     """
+    ch = await _reply_thread(ctx)
+
     if not day:
         current = sheets.get_payday()
         start, end = _get_pay_period(current, datetime.now(jst).date())
-        await ctx.send(
+        await ch.send(
             f"📅 給料日: 毎月 **{current}日**\n"
             f"現在の期間: {start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')}"
         )
@@ -237,27 +262,28 @@ async def cmd_payday(ctx: commands.Context, day: str = "") -> None:
     try:
         d = int(day)
     except ValueError:
-        await ctx.send("⚠️ 日付は数字で入力してください。例: `!給料日 15`")
+        await ch.send("⚠️ 日付は数字で入力してください。例: `!給料日 15`")
         return
 
     if not 1 <= d <= 31:
-        await ctx.send("⚠️ 1〜31の範囲で入力してください。")
+        await ch.send("⚠️ 1〜31の範囲で入力してください。")
         return
 
     success, error_msg = sheets.set_payday(d)
     if success:
         start, end = _get_pay_period(d, datetime.now(jst).date())
-        await ctx.send(
+        await ch.send(
             f"✅ 給料日を **毎月{d}日** に設定しました。\n"
             f"現在の期間: {start.strftime('%m/%d')} 〜 {end.strftime('%m/%d')}"
         )
     else:
-        await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
+        await ch.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="通貨")
 async def cmd_currency(ctx: commands.Context, currency: str = "") -> None:
     """通貨を表示・変更する。引数なしで現在の設定を表示、通貨コードを渡すと変更。"""
+    ch = await _reply_thread(ctx)
     currencies = ", ".join(Config.SUPPORTED_CURRENCIES)
     current = sheets.get_default_currency()
 
@@ -268,24 +294,26 @@ async def cmd_currency(ctx: commands.Context, currency: str = "") -> None:
             "",
             f"`!通貨 JPY` または `!通貨 USD` で変更できます。",
         ]
-        await ctx.send("\n".join(lines))
+        await ch.send("\n".join(lines))
         return
 
     currency = currency.upper()
     if currency not in Config.SUPPORTED_CURRENCIES:
-        await ctx.send(f"⚠️ `{currency}` は未対応です。使用可能: {currencies}")
+        await ch.send(f"⚠️ `{currency}` は未対応です。使用可能: {currencies}")
         return
 
     success, error_msg = sheets.set_default_currency(currency)
     if success:
-        await ctx.send(f"✅ デフォルト通貨を **{currency}** に変更しました。")
+        await ch.send(f"✅ デフォルト通貨を **{currency}** に変更しました。")
     else:
-        await ctx.send(f"❌ 変更に失敗しました。\n```{error_msg}```")
+        await ch.send(f"❌ 変更に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="収入")
 async def cmd_income(ctx: commands.Context, amount: str = "", currency: str = "") -> None:
     """今月の収入を表示・登録する。引数なしで表示、金額を渡すと登録。"""
+    ch = await _reply_thread(ctx)
+
     if not amount:
         now = datetime.now(jst)
         ym = now.strftime("%Y-%m")
@@ -298,30 +326,31 @@ async def cmd_income(ctx: commands.Context, amount: str = "", currency: str = ""
                 found = True
         if not found:
             lines.append("　未登録です。`!収入 <金額>` で登録してください。")
-        await ctx.send("\n".join(lines))
+        await ch.send("\n".join(lines))
         return
 
     value = float_or_none(amount)
     if value is None or value <= 0:
-        await ctx.send("⚠️ 正しい金額を入力してください。例: `!収入 1960 USD`")
+        await ch.send("⚠️ 正しい金額を入力してください。例: `!収入 1960 USD`")
         return
 
     cur = (currency.upper() if currency else Config.DEFAULT_CURRENCY)
     if cur not in Config.SUPPORTED_CURRENCIES:
-        await ctx.send(f"⚠️ 未対応の通貨です。使用可能: {', '.join(Config.SUPPORTED_CURRENCIES)}")
+        await ch.send(f"⚠️ 未対応の通貨です。使用可能: {', '.join(Config.SUPPORTED_CURRENCIES)}")
         return
 
     success, error_msg = sheets.set_income(value, cur)
     if success:
         ym = datetime.now(jst).strftime("%Y年%m月")
-        await ctx.send(f"✅ {ym}の収入を登録しました: **{fmt(value, cur)}**")
+        await ch.send(f"✅ {ym}の収入を登録しました: **{fmt(value, cur)}**")
     else:
-        await ctx.send(f"❌ 収入の登録に失敗しました。\n```{error_msg}```")
+        await ch.send(f"❌ 収入の登録に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="help", aliases=["ヘルプ"])
 async def cmd_help(ctx: commands.Context) -> None:
     """コマンド一覧を表示する。"""
+    ch = await _reply_thread(ctx)
     cur = Config.DEFAULT_CURRENCY
     lines = [
         "📖 **コマンド一覧**",
@@ -357,7 +386,7 @@ async def cmd_help(ctx: commands.Context) -> None:
         "!報告 今月 on/off        毎月給料日: 今月レポート",
         "```",
     ]
-    await ctx.send("\n".join(lines))
+    await ch.send("\n".join(lines))
 
 
 @bot.command(name="報告")
@@ -370,6 +399,7 @@ async def cmd_report_toggle(ctx: commands.Context, *args: str) -> None:
     !報告 今週 on/off      → 毎週日曜: 今週レポートをON/OFF
     !報告 今月 on/off      → 毎月給料日: 今月レポートをON/OFF
     """
+    ch = await _reply_thread(ctx)
     # label → (スプレッドシートキー, 表示説明)
     _label_map: dict[str, tuple[str, str]] = {
         "今日":     ("日次",      "毎日 今日の支出"),
@@ -386,20 +416,20 @@ async def cmd_report_toggle(ctx: commands.Context, *args: str) -> None:
             lines.append(f"　{label} ({desc}): {status}")
         lines.append("")
         lines.append("`!報告 今日 off` のように変更できます。")
-        await ctx.send("\n".join(lines))
+        await ch.send("\n".join(lines))
         return
 
     if len(args) < 2:
-        await ctx.send("⚠️ 使い方: `!報告 今日 on` / `!報告 今週毎日 off`")
+        await ch.send("⚠️ 使い方: `!報告 今日 on` / `!報告 今週毎日 off`")
         return
 
     label, state_str = args[0], args[1].lower()
     if label not in _label_map:
         keys = " ".join(f"`{k}`" for k in _label_map)
-        await ctx.send(f"⚠️ `{label}` は無効です。{keys} のいずれかを指定してください。")
+        await ch.send(f"⚠️ `{label}` は無効です。{keys} のいずれかを指定してください。")
         return
     if state_str not in ("on", "off"):
-        await ctx.send("⚠️ `on` または `off` を指定してください。")
+        await ch.send("⚠️ `on` または `off` を指定してください。")
         return
 
     rtype, desc = _label_map[label]
@@ -407,9 +437,9 @@ async def cmd_report_toggle(ctx: commands.Context, *args: str) -> None:
     success, error_msg = sheets.set_report_enabled(rtype, enabled)
     if success:
         status = "✅ ON" if enabled else "❌ OFF"
-        await ctx.send(f"📢 {desc}の定時報告を **{status}** にしました。")
+        await ch.send(f"📢 {desc}の定時報告を **{status}** にしました。")
     else:
-        await ctx.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
+        await ch.send(f"❌ 設定に失敗しました。\n```{error_msg}```")
 
 
 @bot.command(name="update")
@@ -419,7 +449,8 @@ async def cmd_update(ctx: commands.Context) -> None:
         await ctx.send("⚠️ このコマンドは管理者のみ使用できます。")
         return
 
-    await ctx.send("🔄 アップデートを開始します...")
+    ch = await _reply_thread(ctx)
+    await ch.send("🔄 アップデートを開始します...")
     try:
         result = subprocess.run(
             ["git", "pull", "origin", "main"],
@@ -429,12 +460,12 @@ async def cmd_update(ctx: commands.Context) -> None:
         )
         output = result.stdout.strip() or result.stderr.strip() or "(出力なし)"
         output = output[:1900]  # Discord の 2000 文字制限に収める
-        await ctx.send(f"```{output}```")
+        await ch.send(f"```{output}```")
     except Exception as e:
-        await ctx.send(f"❌ git pull 失敗: {e}")
+        await ch.send(f"❌ git pull 失敗: {e}")
         return
 
-    await ctx.send("♻️ 再起動します...")
+    await ch.send("♻️ 再起動します...")
     sys.exit(0)
 
 
