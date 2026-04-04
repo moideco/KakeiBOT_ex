@@ -385,6 +385,15 @@ async def cmd_help(ctx: commands.Context) -> None:
         "!報告 今週 on/off        毎週日曜: 今週レポート",
         "!報告 今月 on/off        毎月給料日: 今月レポート",
         "```",
+        "**🕐 定時報告の送信時刻** (変更は .env を編集して !update で再起動)",
+        "```",
+        f"毎日レポート  : {Config.DAILY_REPORT_HOUR:02d}:{Config.DAILY_REPORT_MINUTE:02d} JST",
+        f"  → DAILY_REPORT_HOUR / DAILY_REPORT_MINUTE",
+        f"毎週レポート  : 日曜 {Config.WEEKLY_REPORT_HOUR:02d}:{Config.WEEKLY_REPORT_MINUTE:02d} JST",
+        f"  → WEEKLY_REPORT_HOUR / WEEKLY_REPORT_MINUTE",
+        f"毎月レポート  : 給料日 {Config.MONTHLY_REPORT_HOUR:02d}:{Config.MONTHLY_REPORT_MINUTE:02d} JST",
+        f"  → MONTHLY_REPORT_HOUR / MONTHLY_REPORT_MINUTE",
+        "```",
     ]
     await ch.send("\n".join(lines))
 
